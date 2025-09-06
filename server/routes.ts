@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { z } from "zod";
-import { insertPostSchema, insertConfigurationSchema, insertTargetAccountSchema } from "@shared/schema";
+import { insertPostSchema, insertConfigurationSchema, insertTargetAccountSchema, insertSocialCredentialsSchema } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
@@ -229,6 +229,120 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       res.status(500).json({ error: 'Failed to fetch system health' });
+    }
+  });
+
+  // Social Credentials Management
+  app.get('/api/social-credentials/:platform', async (req, res) => {
+    try {
+      const { platform } = req.params;
+      const credentials = await storage.getSocialCredentials(platform);
+      
+      // Don't send sensitive credential data to frontend
+      const sanitized = credentials.map(cred => ({
+        id: cred.id,
+        platform: cred.platform,
+        accountName: cred.accountName,
+        accountType: cred.accountType,
+        isActive: cred.isActive,
+        lastLogin: cred.lastLogin
+      }));
+      
+      res.json(sanitized);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch credentials' });
+    }
+  });
+
+  app.post('/api/social-credentials', async (req, res) => {
+    try {
+      const credentialsData = insertSocialCredentialsSchema.parse(req.body);
+      const credentials = await storage.createSocialCredentials(credentialsData);
+      
+      await storage.addActivity({
+        type: 'system',
+        title: 'Social Account Added',
+        description: `Added ${credentials.platform} account: ${credentials.accountName}`,
+        metadata: { platform: credentials.platform, accountName: credentials.accountName }
+      });
+
+      broadcast({
+        type: 'credentials_updated',
+        data: { platform: credentials.platform, action: 'added' }
+      });
+      
+      res.json({ success: true, message: 'Credentials saved successfully' });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: 'Invalid credential data', details: error.errors });
+      } else {
+        res.status(500).json({ error: 'Failed to save credentials' });
+      }
+    }
+  });
+
+  app.put('/api/social-credentials/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+      const credentials = await storage.updateSocialCredentials(id, updates);
+      
+      broadcast({
+        type: 'credentials_updated',
+        data: { platform: credentials.platform, action: 'updated' }
+      });
+      
+      res.json({ success: true, message: 'Credentials updated successfully' });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to update credentials' });
+    }
+  });
+
+  app.delete('/api/social-credentials/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteSocialCredentials(id);
+      
+      broadcast({
+        type: 'credentials_updated',
+        data: { action: 'deleted' }
+      });
+      
+      res.json({ success: true, message: 'Credentials deleted successfully' });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to delete credentials' });
+    }
+  });
+
+  // Default target accounts initialization
+  app.post('/api/initialize-defaults', async (req, res) => {
+    try {
+      const defaultTwitterAccounts = [
+        { platform: 'twitter', username: 'elonmusk', type: 'like', niche: 'technology' },
+        { platform: 'twitter', username: 'sundarpichai', type: 'like', niche: 'technology' },
+        { platform: 'twitter', username: 'satyanadella', type: 'like', niche: 'technology' },
+        { platform: 'twitter', username: 'tim_cook', type: 'like', niche: 'technology' },
+        { platform: 'twitter', username: 'OpenAI', type: 'retweet', niche: 'technology' },
+        { platform: 'twitter', username: 'Google', type: 'retweet', niche: 'technology' },
+        { platform: 'twitter', username: 'Microsoft', type: 'retweet', niche: 'technology' },
+        { platform: 'twitter', username: 'Apple', type: 'comment', niche: 'technology' },
+        { platform: 'twitter', username: 'Meta', type: 'comment', niche: 'technology' }
+      ];
+
+      for (const account of defaultTwitterAccounts) {
+        await storage.createTargetAccount(account);
+      }
+
+      await storage.addActivity({
+        type: 'system',
+        title: 'Default Configuration Initialized',
+        description: `Added ${defaultTwitterAccounts.length} default target accounts`,
+        metadata: { count: defaultTwitterAccounts.length }
+      });
+
+      res.json({ success: true, message: 'Default accounts initialized' });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to initialize defaults' });
     }
   });
 

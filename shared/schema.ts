@@ -104,6 +104,28 @@ export const activityFeed = pgTable("activity_feed", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const socialCredentials = pgTable("social_credentials", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  platform: text("platform").notNull(), // twitter, telegram, facebook
+  accountName: text("account_name").notNull(),
+  credentials: jsonb("credentials").notNull(), // encrypted login data
+  accountType: text("account_type").default("free"), // free, premium
+  isActive: boolean("is_active").default(true),
+  lastLogin: timestamp("last_login"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const browserSessions = pgTable("browser_sessions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  platform: text("platform").notNull(),
+  sessionData: jsonb("session_data").notNull(), // cookies, tokens, etc
+  userAgent: text("user_agent"),
+  isActive: boolean("is_active").default(true),
+  lastUsed: timestamp("last_used").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Relations
 export const postsRelations = relations(posts, ({ many }) => ({
   analytics: many(analytics),
@@ -164,6 +186,17 @@ export const insertActivityFeedSchema = createInsertSchema(activityFeed).omit({
   createdAt: true,
 });
 
+export const insertSocialCredentialsSchema = createInsertSchema(socialCredentials).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertBrowserSessionSchema = createInsertSchema(browserSessions).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -183,3 +216,7 @@ export type SystemStats = typeof systemStats.$inferSelect;
 export type InsertSystemStats = z.infer<typeof insertSystemStatsSchema>;
 export type ActivityFeed = typeof activityFeed.$inferSelect;
 export type InsertActivityFeed = z.infer<typeof insertActivityFeedSchema>;
+export type SocialCredentials = typeof socialCredentials.$inferSelect;
+export type InsertSocialCredentials = z.infer<typeof insertSocialCredentialsSchema>;
+export type BrowserSession = typeof browserSessions.$inferSelect;
+export type InsertBrowserSession = z.infer<typeof insertBrowserSessionSchema>;

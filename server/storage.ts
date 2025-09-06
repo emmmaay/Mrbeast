@@ -1,11 +1,13 @@
 import { 
   users, posts, analytics, configurations, engagementLog, 
   contentQueue, targetAccounts, systemStats, activityFeed,
+  socialCredentials, browserSessions,
   type User, type InsertUser, type Post, type InsertPost,
   type Analytics, type InsertAnalytics, type Configuration, type InsertConfiguration,
   type EngagementLog, type InsertEngagementLog, type ContentQueue, type InsertContentQueue,
   type TargetAccount, type InsertTargetAccount, type SystemStats, type InsertSystemStats,
-  type ActivityFeed, type InsertActivityFeed
+  type ActivityFeed, type InsertActivityFeed, type SocialCredentials, type InsertSocialCredentials,
+  type BrowserSession, type InsertBrowserSession
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, gte, sql } from "drizzle-orm";
@@ -55,6 +57,18 @@ export interface IStorage {
   // Activity Feed
   addActivity(activity: InsertActivityFeed): Promise<ActivityFeed>;
   getRecentActivity(limit?: number): Promise<ActivityFeed[]>;
+
+  // Social Credentials
+  createSocialCredentials(credentials: InsertSocialCredentials): Promise<SocialCredentials>;
+  getSocialCredentials(platform: string): Promise<SocialCredentials[]>;
+  updateSocialCredentials(id: string, updates: Partial<SocialCredentials>): Promise<SocialCredentials>;
+  deleteSocialCredentials(id: string): Promise<void>;
+
+  // Browser Sessions
+  createBrowserSession(session: InsertBrowserSession): Promise<BrowserSession>;
+  getBrowserSession(platform: string): Promise<BrowserSession | undefined>;
+  updateBrowserSession(id: string, updates: Partial<BrowserSession>): Promise<BrowserSession>;
+  deleteBrowserSession(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -187,20 +201,27 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getTargetAccounts(platform?: string, type?: string): Promise<TargetAccount[]> {
-    let query = db.select().from(targetAccounts).where(eq(targetAccounts.isActive, true));
+    let baseQuery = db.select().from(targetAccounts);
     
     if (platform && type) {
-      query = query.where(and(
+      return await baseQuery.where(and(
+        eq(targetAccounts.isActive, true),
         eq(targetAccounts.platform, platform),
         eq(targetAccounts.type, type)
       ));
     } else if (platform) {
-      query = query.where(eq(targetAccounts.platform, platform));
+      return await baseQuery.where(and(
+        eq(targetAccounts.isActive, true),
+        eq(targetAccounts.platform, platform)
+      ));
     } else if (type) {
-      query = query.where(eq(targetAccounts.type, type));
+      return await baseQuery.where(and(
+        eq(targetAccounts.isActive, true),
+        eq(targetAccounts.type, type)
+      ));
     }
     
-    return await query;
+    return await baseQuery.where(eq(targetAccounts.isActive, true));
   }
 
   async updateTargetAccount(id: string, updates: Partial<TargetAccount>): Promise<TargetAccount> {
@@ -243,6 +264,65 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(activityFeed)
       .orderBy(desc(activityFeed.createdAt))
       .limit(limit);
+  }
+
+  // Social Credentials
+  async createSocialCredentials(credentials: InsertSocialCredentials): Promise<SocialCredentials> {
+    const [newCredentials] = await db.insert(socialCredentials).values(credentials).returning();
+    return newCredentials;
+  }
+
+  async getSocialCredentials(platform: string): Promise<SocialCredentials[]> {
+    return await db.select().from(socialCredentials)
+      .where(and(
+        eq(socialCredentials.platform, platform),
+        eq(socialCredentials.isActive, true)
+      ));
+  }
+
+  async updateSocialCredentials(id: string, updates: Partial<SocialCredentials>): Promise<SocialCredentials> {
+    const [updated] = await db.update(socialCredentials)
+      .set({ ...updates, updatedAt: sql`now()` })
+      .where(eq(socialCredentials.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteSocialCredentials(id: string): Promise<void> {
+    await db.update(socialCredentials)
+      .set({ isActive: false })
+      .where(eq(socialCredentials.id, id));
+  }
+
+  // Browser Sessions
+  async createBrowserSession(session: InsertBrowserSession): Promise<BrowserSession> {
+    const [newSession] = await db.insert(browserSessions).values(session).returning();
+    return newSession;
+  }
+
+  async getBrowserSession(platform: string): Promise<BrowserSession | undefined> {
+    const [session] = await db.select().from(browserSessions)
+      .where(and(
+        eq(browserSessions.platform, platform),
+        eq(browserSessions.isActive, true)
+      ))
+      .orderBy(desc(browserSessions.lastUsed))
+      .limit(1);
+    return session || undefined;
+  }
+
+  async updateBrowserSession(id: string, updates: Partial<BrowserSession>): Promise<BrowserSession> {
+    const [updated] = await db.update(browserSessions)
+      .set({ ...updates, lastUsed: sql`now()` })
+      .where(eq(browserSessions.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteBrowserSession(id: string): Promise<void> {
+    await db.update(browserSessions)
+      .set({ isActive: false })
+      .where(eq(browserSessions.id, id));
   }
 }
 

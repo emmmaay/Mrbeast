@@ -204,7 +204,7 @@ export class PlatformAutomation {
   async performEngagementActions(): Promise<void> {
     try {
       const config = await storage.getConfiguration('auto_engagement');
-      if (!config?.value?.enabled) {
+      if (!config?.value || !(config.value as any)?.enabled) {
         return;
       }
 

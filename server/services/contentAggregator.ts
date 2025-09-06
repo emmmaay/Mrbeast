@@ -206,7 +206,7 @@ export class ContentAggregator {
     const words2 = str2.toLowerCase().split(' ');
     
     const intersection = words1.filter(word => words2.includes(word));
-    const union = [...new Set([...words1, ...words2])];
+    const union = Array.from(new Set([...words1, ...words2]));
     
     return intersection.length / union.length;
   }

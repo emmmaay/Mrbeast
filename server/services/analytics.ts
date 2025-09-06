@@ -31,14 +31,14 @@ export class AnalyticsService {
 
     return {
       postsToday,
-      engagementRate,
+      engagementRate: engagementRate.toString(),
       aiReplies,
       activeSources,
       totalSources,
-      cpuUsage: currentStats.cpuUsage,
-      memoryUsage: currentStats.memoryUsage,
-      storageUsage: currentStats.storageUsage,
-      uptime: currentStats.uptime
+      cpuUsage: currentStats.cpuUsage.toString(),
+      memoryUsage: currentStats.memoryUsage.toString(),
+      storageUsage: currentStats.storageUsage.toString(),
+      uptime: Math.floor(currentStats.uptime)
     };
   }
 
@@ -82,7 +82,7 @@ export class AnalyticsService {
     const engagementHistory = await storage.getEngagementHistory(100);
     return engagementHistory.filter(engagement => 
       engagement.type === 'reply' && 
-      engagement.createdAt >= today &&
+      engagement.createdAt && engagement.createdAt >= today &&
       engagement.success
     ).length;
   }
@@ -122,7 +122,7 @@ export class AnalyticsService {
           comments: metrics.comments || 0,
           retweets: metrics.retweets || 0,
           impressions: metrics.impressions || 0,
-          engagementRate
+          engagementRate: engagementRate.toString()
         });
       }
     } catch (error) {
